@@ -1,0 +1,18 @@
+services:
+  blog:
+    # 현재 폴더의 Dockerfile을 사용해 개발 이미지를 만듭니다.
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    # 내 컴퓨터의 프로젝트 폴더를 컨테이너의 /workspace에 연결합니다.
+    # 어느 쪽에서 파일을 수정해도 즉시 같은 파일이 보입니다.
+    volumes:
+      - .:/workspace:cached
+
+    # 앞으로 Astro 개발 서버가 사용할 포트를 연결합니다.
+    ports:
+      - "4321:4321"
+
+    # 개발 서버를 아직 만들지 않았으므로 컨테이너만 계속 실행합니다.
+    command: sleep infinity

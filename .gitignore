@@ -1,0 +1,9 @@
+# JavaScript 의존성: package-lock.json만 Git으로 관리합니다.
+node_modules/
+
+# Astro가 빌드하여 생성하는 결과물입니다.
+dist/
+
+# 운영체제가 자동으로 만드는 파일입니다.
+.DS_Store
+Thumbs.db
