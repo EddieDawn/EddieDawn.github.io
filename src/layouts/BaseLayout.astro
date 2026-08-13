@@ -1,6 +1,8 @@
 ---
 import Footer from "../components/Footer.astro";
 import Header from "../components/Header.astro";
+import ProfileSidebar from "../components/ProfileSidebar.astro";
+import { site } from "../config/site";
 import "../styles/global.css";
 
 interface Props {
@@ -8,10 +10,7 @@ interface Props {
   description?: string;
 }
 
-const {
-  title,
-  description = "배운 것을 기록하고, 기록을 통해 성장하는 개발 TIL",
-} = Astro.props;
+const { title, description = site.description } = Astro.props;
 const currentPath = Astro.url.pathname;
 ---
 
@@ -25,9 +24,10 @@ const currentPath = Astro.url.pathname;
   </head>
   <body class="flex min-h-screen flex-col">
     <Header currentPath={currentPath} />
-    <main class="mx-auto w-full max-w-5xl flex-1 px-5 py-12 sm:px-8 sm:py-16">
-      <slot />
-    </main>
+    <div class="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-10 px-5 py-10 sm:px-8 sm:py-14 lg:flex-row lg:gap-14">
+      <ProfileSidebar />
+      <main class="min-w-0 flex-1"><slot /></main>
+    </div>
     <Footer />
   </body>
 </html>
