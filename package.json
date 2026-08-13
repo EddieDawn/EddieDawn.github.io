@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "import:notion": "node scripts/run_notion_import.mjs",
+    "predev": "npm run import:notion",
     "dev": "astro dev --host 0.0.0.0",
+    "prebuild": "npm run import:notion",
     "build": "astro build",
     "preview": "astro preview --host 0.0.0.0",
     "check": "astro check"
