@@ -1,9 +1,6 @@
 ---
 title: "시간 복잡도를 보는 첫 기준"
-description: "입력 크기가 커질 때 알고리즘의 실행 시간이 어떻게 달라지는지 정리한다."
 publishedAt: 2026-08-13
-category: "algorithm"
-tags: ["algorithm", "complexity"]
 ---
 
 # 시간 복잡도

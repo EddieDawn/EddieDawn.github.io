@@ -1,9 +1,6 @@
 ---
 title: "AI 학습 기록을 시작하며"
-description: "인공지능 학습에서 개념과 실험 기록을 분리하는 기준을 정한다."
 publishedAt: 2026-08-13
-category: "ai"
-tags: ["ai", "learning"]
 ---
 
 # AI TIL 작성 기준

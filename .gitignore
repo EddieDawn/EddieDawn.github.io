@@ -5,6 +5,9 @@ node_modules/
 # Astro가 빌드하여 생성하는 결과물입니다.
 dist/
 
+# Notion에서 내려받은 원본 ZIP은 로컬에서만 보관합니다.
+imports/
+
 # 운영체제가 자동으로 만드는 파일입니다.
 .DS_Store
 Thumbs.db

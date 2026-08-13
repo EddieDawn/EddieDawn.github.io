@@ -1,9 +1,6 @@
 ---
 title: "Java를 처음 다시 정리하며"
-description: "JDK, JVM, JRE의 역할을 나만의 언어로 정리한다."
 publishedAt: 2026-08-13
-category: "java"
-tags: ["java", "jvm"]
 ---
 
 # JDK, JRE, JVM
