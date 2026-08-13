@@ -1,0 +1,41 @@
+---
+interface Props {
+  currentPath: string;
+}
+
+const { currentPath } = Astro.props;
+const navigation = [
+  { href: "/", label: "홈" },
+  { href: "/posts", label: "TIL" },
+  { href: "/about", label: "소개" },
+];
+---
+
+<header class="border-b border-slate-200 bg-white">
+  <div class="mx-auto flex max-w-5xl items-center justify-between px-5 py-4 sm:px-8">
+    <a class="text-lg font-bold tracking-tight text-slate-950 hover:text-blue-700" href="/">
+      Eddie's TIL
+    </a>
+
+    <nav aria-label="주요 메뉴">
+      <ul class="flex items-center gap-4 text-sm font-medium text-slate-600 sm:gap-6">
+        {
+          navigation.map(({ href, label }) => (
+            <li>
+              <a
+                aria-current={currentPath === href ? "page" : undefined}
+                class:list={{
+                  "text-blue-700": currentPath === href,
+                  "hover:text-slate-950": currentPath !== href,
+                }}
+                href={href}
+              >
+                {label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+  </div>
+</header>

@@ -1,0 +1,33 @@
+---
+import Footer from "../components/Footer.astro";
+import Header from "../components/Header.astro";
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const {
+  title,
+  description = "배운 것을 기록하고, 기록을 통해 성장하는 개발 TIL",
+} = Astro.props;
+const currentPath = Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content={description} />
+    <title>{title}</title>
+  </head>
+  <body class="flex min-h-screen flex-col">
+    <Header currentPath={currentPath} />
+    <main class="mx-auto w-full max-w-5xl flex-1 px-5 py-12 sm:px-8 sm:py-16">
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>

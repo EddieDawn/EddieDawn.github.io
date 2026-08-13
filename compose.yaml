@@ -9,6 +9,9 @@ services:
     # 어느 쪽에서 파일을 수정해도 즉시 같은 파일이 보입니다.
     volumes:
       - .:/workspace:cached
+      # Windows 호스트의 node_modules와 Linux 컨테이너의 네이티브 모듈이 섞이지 않도록
+      # 의존성은 Docker 볼륨에만 보관합니다.
+      - node_modules:/workspace/node_modules
 
     # 앞으로 Astro 개발 서버가 사용할 포트를 연결합니다.
     ports:
@@ -16,3 +19,6 @@ services:
 
     # 개발 서버를 아직 만들지 않았으므로 컨테이너만 계속 실행합니다.
     command: sleep infinity
+
+volumes:
+  node_modules:
