@@ -1,5 +1,6 @@
 # JavaScript 의존성: package-lock.json만 Git으로 관리합니다.
 node_modules/
+.astro/
 
 # Astro가 빌드하여 생성하는 결과물입니다.
 dist/
