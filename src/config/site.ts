@@ -13,12 +13,12 @@ export const site: {
   location: string;
   links: ProfileLink[];
 } = {
-  name: "Eddie",
+  name: "Eddie.Dev",
   title: "Eddie's TIL",
   description: "배운 것을 기록하고, 기록을 통해 성장하는 개발 TIL",
   profileImage: "https://github.com/EddieDawn.png?size=240",
-  bio: "꾸준히 배우고, 나만의 언어로 기록합니다.",
-  location: "Seoul, South Korea",
+  bio: "SSAFY 16th",
+  location: "Suwon",
   links: [
     { label: "GitHub", href: "https://github.com/EddieDawn", icon: "github" },
     // 아래 URL의 `your-instagram-id`를 실제 Instagram 아이디로 바꾸세요.
