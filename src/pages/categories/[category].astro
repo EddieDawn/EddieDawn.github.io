@@ -1,4 +1,6 @@
 ---
+import { getCollection } from "astro:content";
+import PostCard from "../../components/PostCard.astro";
 import { categories } from "../../config/categories";
 import BaseLayout from "../../layouts/BaseLayout.astro";
 
@@ -10,6 +12,10 @@ export function getStaticPaths() {
 }
 
 const { category } = Astro.props;
+const posts = (await getCollection(
+  "posts",
+  ({ data }) => !data.draft && data.category === category.slug,
+)).sort((a, b) => b.data.publishedAt.getTime() - a.data.publishedAt.getTime());
 ---
 
 <BaseLayout title={`${category.name} | Eddie's TIL`} description={category.description}>
@@ -20,9 +26,17 @@ const { category } = Astro.props;
       <h1 class="mt-5 text-4xl font-bold tracking-tight text-stone-800">{category.name}</h1>
       <p class="mt-4 text-lg leading-8 text-stone-600">{category.description}</p>
     </div>
-    <div class="mt-10 rounded-md border border-dashed border-stone-300 bg-[#f6f3ee] px-6 py-10 text-center">
-      <p class="font-semibold text-stone-700">아직 작성된 TIL이 없습니다.</p>
-      <p class="mt-3 text-sm leading-6 text-stone-500">Markdown 기반 게시물 기능을 추가하면 이곳에 {category.name} 글이 표시됩니다.</p>
-    </div>
+    {
+      posts.length > 0 ? (
+        <div class="mt-10 space-y-4">
+          {posts.map((post) => <PostCard post={post} />)}
+        </div>
+      ) : (
+        <div class="mt-10 rounded-md border border-dashed border-stone-300 bg-[#f6f3ee] px-6 py-10 text-center">
+          <p class="font-semibold text-stone-700">아직 작성된 TIL이 없습니다.</p>
+          <p class="mt-3 text-sm leading-6 text-stone-600">이 카테고리에 Markdown 글을 추가하면 여기에 자동으로 표시됩니다.</p>
+        </div>
+      )
+    }
   </section>
 </BaseLayout>
