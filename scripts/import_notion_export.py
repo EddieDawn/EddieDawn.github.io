@@ -8,6 +8,7 @@ page as "Markdown & CSV", then run this script against the downloaded ZIP.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import shutil
@@ -17,6 +18,7 @@ import zipfile
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path, PurePosixPath
+from typing import Callable
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 
@@ -25,6 +27,10 @@ IMAGE_EXTENSIONS = {".avif", ".gif", ".jpeg", ".jpg", ".png", ".svg", ".webp"}
 FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*\n", re.DOTALL)
 H1_RE = re.compile(r"^(?P<marker>#)\s+(?P<title>.+?)\s*$")
 DATE_METADATA_RE = re.compile(r"^(?:날짜|작성일|date)\s*:\s*(?P<value>.+?)\s*$", re.IGNORECASE)
+FENCE_OPEN_RE = re.compile(r"^[ \t]{0,3}(?P<marker>`{3,}|~{3,})")
+IMPORT_SOURCE_MARKER_RE = re.compile(
+    r"<!-- notion-import-source: (?P<source_id>[a-z0-9-]+) -->"
+)
 KOREAN_DATE_RE = re.compile(r"(?P<year>\d{4})년\s*(?P<month>\d{1,2})월\s*(?P<day>\d{1,2})일")
 ISO_DATE_RE = re.compile(r"(?P<year>\d{4})[-./](?P<month>\d{1,2})[-./](?P<day>\d{1,2})")
 MARKDOWN_LINK_RE = re.compile(
@@ -44,14 +50,21 @@ class ImportErrorWithHint(Exception):
 
 
 @dataclass
+class AssetCopy:
+    source_relative_path: Path
+    destination: Path
+
+
+@dataclass
 class ImportPlan:
     zip_path: Path
     source_markdown: Path
     post_path: Path
+    source_id: str
     title: str
     published_at: str
     body: str
-    copied_assets: list[tuple[bytes, Path]] = field(default_factory=list)
+    copied_assets: list[AssetCopy] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -185,6 +198,26 @@ def parse_published_at(value: str) -> str | None:
     return None
 
 
+def opening_fence(line: str) -> tuple[str, int] | None:
+    """Return a Markdown code-fence marker when a line opens one."""
+    match = FENCE_OPEN_RE.match(line)
+    if not match:
+        return None
+    marker = match.group("marker")
+    return marker[0], len(marker)
+
+
+def closes_fence(line: str, fence: tuple[str, int]) -> bool:
+    """Return whether line closes the given CommonMark fenced code block."""
+    marker, minimum_length = fence
+    return bool(
+        re.fullmatch(
+            rf"[ \t]{{0,3}}{re.escape(marker)}{{{minimum_length},}}[ \t]*",
+            line,
+        )
+    )
+
+
 def extract_title_published_at_and_body(source_markdown: Path) -> tuple[str, str, str]:
     text = source_markdown.read_text(encoding="utf-8-sig")
     text = FRONTMATTER_RE.sub("", text, count=1).replace("\r\n", "\n")
@@ -192,7 +225,15 @@ def extract_title_published_at_and_body(source_markdown: Path) -> tuple[str, str
 
     title = ""
     first_h1_index: int | None = None
+    fence: tuple[str, int] | None = None
     for index, line in enumerate(lines):
+        if fence:
+            if closes_fence(line, fence):
+                fence = None
+            continue
+        if opened_fence := opening_fence(line):
+            fence = opened_fence
+            continue
         match = H1_RE.match(line)
         if match:
             title = match.group("title").strip()
@@ -203,7 +244,17 @@ def extract_title_published_at_and_body(source_markdown: Path) -> tuple[str, str
 
     published_at: str | None = None
     normalized: list[str] = []
+    fence = None
     for index, line in enumerate(lines):
+        if fence:
+            normalized.append(line)
+            if closes_fence(line, fence):
+                fence = None
+            continue
+        if opened_fence := opening_fence(line):
+            normalized.append(line)
+            fence = opened_fence
+            continue
         match = H1_RE.match(line)
         if index == first_h1_index:
             continue
@@ -264,6 +315,76 @@ def public_url_for_asset(destination: Path, public_root: Path) -> str:
     return "/" + quote(relative, safe="/-._~")
 
 
+def matching_inline_code_delimiter(text: str, start: int, length: int) -> tuple[int, int] | None:
+    """Find a matching backtick run for an inline Markdown code span."""
+    search_from = start
+    while search_from < len(text):
+        candidate_start = text.find("`", search_from)
+        if candidate_start == -1:
+            return None
+        candidate_end = candidate_start
+        while candidate_end < len(text) and text[candidate_end] == "`":
+            candidate_end += 1
+        if candidate_end - candidate_start == length:
+            return candidate_start, candidate_end
+        search_from = candidate_end
+    return None
+
+
+def rewrite_inline_code_free_text(text: str, rewrite: Callable[[str], str]) -> str:
+    """Apply rewrite only outside inline Markdown code spans."""
+    rewritten: list[str] = []
+    plain_start = 0
+    position = 0
+    while position < len(text):
+        opener_start = text.find("`", position)
+        if opener_start == -1:
+            break
+        opener_end = opener_start
+        while opener_end < len(text) and text[opener_end] == "`":
+            opener_end += 1
+        closer = matching_inline_code_delimiter(text, opener_end, opener_end - opener_start)
+        if closer is None:
+            # An unmatched delimiter is literal text, not a code span.
+            position = opener_end
+            continue
+        closer_start, closer_end = closer
+        rewritten.append(rewrite(text[plain_start:opener_start]))
+        rewritten.append(text[opener_start:closer_end])
+        plain_start = closer_end
+        position = closer_end
+    rewritten.append(rewrite(text[plain_start:]))
+    return "".join(rewritten)
+
+
+def rewrite_code_free_markdown(body: str, rewrite: Callable[[str], str]) -> str:
+    """Apply rewrite outside fenced and inline Markdown code blocks."""
+    rewritten: list[str] = []
+    plain_lines: list[str] = []
+    fence: tuple[str, int] | None = None
+
+    def flush_plain_lines() -> None:
+        if plain_lines:
+            rewritten.append(rewrite_inline_code_free_text("".join(plain_lines), rewrite))
+            plain_lines.clear()
+
+    for line in body.splitlines(keepends=True):
+        fence_line = line.rstrip("\r\n")
+        if fence:
+            rewritten.append(line)
+            if closes_fence(fence_line, fence):
+                fence = None
+            continue
+        if opened_fence := opening_fence(fence_line):
+            flush_plain_lines()
+            rewritten.append(line)
+            fence = opened_fence
+            continue
+        plain_lines.append(line)
+    flush_plain_lines()
+    return "".join(rewritten)
+
+
 def rewrite_links_and_collect_assets(
     body: str,
     source_markdown: Path,
@@ -294,7 +415,10 @@ def rewrite_links_and_collect_assets(
             rewritten_target = f"<{rewritten_target}>"
         return f"{match.group('prefix')}[{match.group('label')}]({rewritten_target}{match.group('link_title') or ''})"
 
-    rewritten = MARKDOWN_LINK_RE.sub(replace_link, body)
+    rewritten = rewrite_code_free_markdown(
+        body,
+        lambda text: MARKDOWN_LINK_RE.sub(replace_link, text),
+    )
     return rewritten, sorted(assets.items(), key=lambda pair: str(pair[1])), list(dict.fromkeys(warnings))
 
 
@@ -308,6 +432,52 @@ def build_frontmatter(title: str, published_at: str) -> str:
             "",
         ]
     )
+
+
+def import_source_id(zip_path: Path) -> str:
+    """Return a stable identifier for a Notion export ZIP, independent of its post path."""
+    zip_id = UUID_RE.search(zip_path.stem)
+    if zip_id:
+        return f"notion-export-{zip_id.group('id').replace('-', '').lower()}"
+    digest = hashlib.sha256()
+    with zip_path.open("rb") as archive_file:
+        for chunk in iter(lambda: archive_file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return f"notion-export-sha256-{digest.hexdigest()}"
+
+
+def import_source_marker(source_id: str) -> str:
+    return f"<!-- notion-import-source: {source_id} -->"
+
+
+def source_ids_in_posts(content_root: Path) -> set[str]:
+    if not content_root.is_dir():
+        return set()
+    source_ids: set[str] = set()
+    for post_path in content_root.glob("*.md"):
+        text = post_path.read_text(encoding="utf-8-sig")
+        source_ids.update(match.group("source_id") for match in IMPORT_SOURCE_MARKER_RE.finditer(text))
+    return source_ids
+
+
+def add_source_marker_to_existing_post(plan: ImportPlan) -> bool:
+    """Migrate an older auto-named post so a later rename remains recognizable."""
+    if not plan.post_path.is_file():
+        return False
+    text = plan.post_path.read_text(encoding="utf-8-sig")
+    if IMPORT_SOURCE_MARKER_RE.search(text):
+        return False
+    frontmatter = FRONTMATTER_RE.match(text)
+    if not frontmatter:
+        return False
+    updated = (
+        text[:frontmatter.end()]
+        + import_source_marker(plan.source_id)
+        + "\n\n"
+        + text[frontmatter.end():]
+    )
+    plan.post_path.write_text(updated, encoding="utf-8", newline="\n")
+    return True
 
 
 def auto_slug(source_markdown: Path, zip_path: Path) -> str:
@@ -332,7 +502,10 @@ def create_import_plan(args: argparse.Namespace, zip_path: Path, slug: str | Non
         rewritten_body, assets, warnings = rewrite_links_and_collect_assets(
             body, source_markdown, extracted_root, args.public_root, resolved_slug
         )
-        copied_assets = [(source.read_bytes(), destination) for source, destination in assets]
+        copied_assets = [
+            AssetCopy(source.relative_to(extracted_root), destination)
+            for source, destination in assets
+        ]
         post_path = args.content_root / f"{resolved_slug}.md"
         plan = ImportPlan(
             zip_path=zip_path,
@@ -340,7 +513,13 @@ def create_import_plan(args: argparse.Namespace, zip_path: Path, slug: str | Non
             post_path=post_path,
             title=title,
             published_at=published_at,
-            body=build_frontmatter(title, published_at) + rewritten_body,
+            source_id=import_source_id(zip_path),
+            body=(
+                build_frontmatter(title, published_at)
+                + import_source_marker(import_source_id(zip_path))
+                + "\n\n"
+                + rewritten_body
+            ),
             copied_assets=copied_assets,
             warnings=warnings,
         )
@@ -351,7 +530,7 @@ def ensure_plans_are_writable(plans: list[ImportPlan], overwrite: bool) -> None:
     destinations: dict[Path, Path] = {}
     duplicate_destinations: list[Path] = []
     for plan in plans:
-        for destination in [plan.post_path, *(target for _, target in plan.copied_assets)]:
+        for destination in [plan.post_path, *(asset.destination for asset in plan.copied_assets)]:
             if destination in destinations:
                 duplicate_destinations.append(destination)
             destinations[destination] = plan.zip_path
@@ -381,8 +560,12 @@ def deduplicate_plans(plans: list[ImportPlan]) -> tuple[list[ImportPlan], list[I
             unique_by_post_path[plan.post_path] = plan
             continue
 
-        existing_assets = {destination: content for content, destination in existing.copied_assets}
-        current_assets = {destination: content for content, destination in plan.copied_assets}
+        existing_assets = {
+            asset.destination: asset.source_relative_path for asset in existing.copied_assets
+        }
+        current_assets = {
+            asset.destination: asset.source_relative_path for asset in plan.copied_assets
+        }
         if existing.body == plan.body and existing_assets == current_assets:
             duplicates.append(plan)
             continue
@@ -395,9 +578,17 @@ def deduplicate_plans(plans: list[ImportPlan]) -> tuple[list[ImportPlan], list[I
 
 def write_plan(plan: ImportPlan) -> None:
     plan.post_path.parent.mkdir(parents=True, exist_ok=True)
-    for content, destination in plan.copied_assets:
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(content)
+    with tempfile.TemporaryDirectory(prefix="notion-export-write-") as temporary_directory:
+        extracted_root = extract_zip_safely(plan.zip_path, Path(temporary_directory))
+        for asset in plan.copied_assets:
+            source = extracted_root / asset.source_relative_path
+            if not source.is_file():
+                raise ImportErrorWithHint(
+                    f"가져오기 중 첨부 파일을 다시 찾지 못했습니다: {asset.source_relative_path}"
+                )
+            asset.destination.parent.mkdir(parents=True, exist_ok=True)
+            with source.open("rb") as source_file, asset.destination.open("wb") as destination_file:
+                shutil.copyfileobj(source_file, destination_file)
     plan.post_path.write_text(plan.body, encoding="utf-8", newline="\n")
 
 
@@ -416,9 +607,17 @@ def main() -> int:
             plans = [create_import_plan(args, args.zip_path, args.slug)]
             duplicates = []
         skipped = []
+        marked = []
         if args.skip_existing:
-            skipped = [plan for plan in plans if plan.post_path.exists()]
-            plans = [plan for plan in plans if not plan.post_path.exists()]
+            if not args.dry_run:
+                marked = [plan for plan in plans if add_source_marker_to_existing_post(plan)]
+            existing_source_ids = source_ids_in_posts(args.content_root)
+            skipped = [
+                plan
+                for plan in plans
+                if plan.post_path.exists() or plan.source_id in existing_source_ids
+            ]
+            plans = [plan for plan in plans if plan not in skipped]
         ensure_plans_are_writable(plans, args.overwrite)
         if not args.dry_run:
             for plan in plans:
@@ -436,6 +635,8 @@ def main() -> int:
             print(f"  경고: {warning}")
     for duplicate in duplicates:
         print(f"중복 제외: {duplicate.zip_path.name}")
+    for marked_plan in marked:
+        print(f"Added import marker: {marked_plan.post_path.name}")
     for skipped_plan in skipped:
         print(f"Skipped existing post: {skipped_plan.post_path.name}")
     return 0
