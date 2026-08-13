@@ -1,0 +1,28 @@
+---
+import { categories } from "../../config/categories";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+export function getStaticPaths() {
+  return categories.map((category) => ({
+    params: { category: category.slug },
+    props: { category },
+  }));
+}
+
+const { category } = Astro.props;
+---
+
+<BaseLayout title={`${category.name} | Eddie's TIL`} description={category.description}>
+  <section class="max-w-3xl">
+    <a class="text-sm font-semibold text-[#7a5c54] hover:underline hover:underline-offset-4" href="/">← Categories</a>
+    <div class="mt-8 border-b border-stone-300/80 pb-6">
+      <span class="block h-1 w-12 rounded-full" style={`background-color: ${category.accent}`}></span>
+      <h1 class="mt-5 text-4xl font-bold tracking-tight text-stone-800">{category.name}</h1>
+      <p class="mt-4 text-lg leading-8 text-stone-600">{category.description}</p>
+    </div>
+    <div class="mt-10 rounded-md border border-dashed border-stone-300 bg-[#f6f3ee] px-6 py-10 text-center">
+      <p class="font-semibold text-stone-700">아직 작성된 TIL이 없습니다.</p>
+      <p class="mt-3 text-sm leading-6 text-stone-500">Markdown 기반 게시물 기능을 추가하면 이곳에 {category.name} 글이 표시됩니다.</p>
+    </div>
+  </section>
+</BaseLayout>

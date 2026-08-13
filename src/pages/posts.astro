@@ -1,11 +1,22 @@
 ---
+import { categories } from "../config/categories";
 import BaseLayout from "../layouts/BaseLayout.astro";
 ---
 
 <BaseLayout title="TIL | Eddie's TIL" description="Eddie가 기록한 개발 학습 노트 목록입니다.">
-  <section class="max-w-3xl space-y-4">
+  <section class="max-w-3xl">
     <p class="text-sm font-semibold tracking-wide text-[#7a5c54]">TIL</p>
-    <h1 class="text-3xl font-bold tracking-tight text-stone-800">학습 기록</h1>
-    <p class="leading-7 text-stone-600">글 콘텐츠 기능을 구현하면 이곳에 최신 학습 기록이 표시됩니다.</p>
+    <h1 class="mt-4 text-3xl font-bold tracking-tight text-stone-800">학습 기록</h1>
+    <p class="mt-4 leading-7 text-stone-600">카테고리를 선택해 주제별 학습 기록을 살펴보세요.</p>
+    <ul class="mt-8 space-y-3">
+      {categories.map((category) => (
+        <li>
+          <a class="flex items-center justify-between rounded-md border border-stone-300/80 bg-[#f6f3ee] px-5 py-4 hover:border-stone-400 hover:bg-white" href={`/categories/${category.slug}`}>
+            <span class="font-semibold text-stone-800">{category.name}</span>
+            <span class="text-sm text-stone-500">→</span>
+          </a>
+        </li>
+      ))}
+    </ul>
   </section>
 </BaseLayout>
