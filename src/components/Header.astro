@@ -1,4 +1,6 @@
 ---
+import { site } from "../config/site";
+
 interface Props {
   currentPath: string;
 }
@@ -6,27 +8,36 @@ interface Props {
 const { currentPath } = Astro.props;
 const navigation = [
   { href: "/", label: "홈" },
-  { href: "/posts", label: "TIL" },
+  { href: "/posts", label: "Category" },
   { href: "/about", label: "소개" },
 ];
 ---
 
-<header class="border-b border-slate-200 bg-white">
-  <div class="mx-auto flex max-w-5xl items-center justify-between px-5 py-4 sm:px-8">
-    <a class="text-lg font-bold tracking-tight text-slate-950 hover:text-blue-700" href="/">
-      Eddie's TIL
+<header class="border-b border-stone-300/80 bg-[#f6f3ee]/90">
+  <div
+    class="mx-auto flex max-w-6xl items-center justify-between px-5 py-5 sm:px-8"
+  >
+    <a class="group" href="/">
+      <p
+        class="text-base font-bold tracking-tight text-stone-800 group-hover:text-[#7a5c54]"
+      >
+        {site.title}
+      </p>
+      <p class="mt-1 text-xs text-stone-600">Today I Learned</p>
     </a>
-
     <nav aria-label="주요 메뉴">
-      <ul class="flex items-center gap-4 text-sm font-medium text-slate-600 sm:gap-6">
+      <ul
+        class="flex items-center gap-4 text-sm font-medium text-stone-600 sm:gap-6"
+      >
         {
           navigation.map(({ href, label }) => (
             <li>
               <a
                 aria-current={currentPath === href ? "page" : undefined}
                 class:list={{
-                  "text-blue-700": currentPath === href,
-                  "hover:text-slate-950": currentPath !== href,
+                  "text-[#7a5c54] underline underline-offset-8":
+                    currentPath === href,
+                  "hover:text-stone-900": currentPath !== href,
                 }}
                 href={href}
               >
