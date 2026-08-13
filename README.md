@@ -1,84 +1,155 @@
-# Eddie's Dev Blog
+# Eddie's TIL
 
-> 배운 것을 기록하고, 기록을 통해 성장하는 개발 블로그
+> 배운 것을 Markdown으로 기록하고, GitHub Pages에 배포하는 개인 개발 학습 기록 사이트입니다.
 
-부트캠프 TIL과 개인 개발·스터디 경험을 정리하기 위해 만드는 개인 블로그입니다. 이 저장소는 단순한 블로그 결과물뿐 아니라 Docker, 개발환경 통일, 자동 배포까지 직접 학습하는 과정도 함께 담습니다.
+Java, AI, Algorithm 카테고리의 TIL을 작성할 수 있습니다. 글 파일을 추가하면 Astro가 글 목록, 카테고리 목록, 글 상세 페이지를 정적 HTML로 생성합니다.
 
-## 목표
+## 현재 구현된 기능
 
-- Markdown으로 부담 없이 TIL과 기술 글을 작성한다.
-- 읽기 쉬운 구조와 일관된 글 품질을 유지한다.
-- 집과 부트캠프 등 어느 환경에서도 같은 개발환경을 사용한다.
-- 비용 없이 GitHub Pages로 배포하고 운영한다.
+- Astro + Tailwind CSS 기반의 반응형 정적 사이트
+- 프로필 사이드바와 GitHub · Instagram · Email 링크
+- Java, AI, Algorithm 카테고리 페이지
+- Markdown 기반 글 작성 및 글 목록/상세 페이지 자동 생성
+- `draft: true` 글 숨김 처리
+- 최신 발행일 순 글 정렬
+- Docker Compose + VS Code Dev Containers 개발 환경
+- GitHub Actions를 통한 PR 검사 및 GitHub Pages 배포
 
-## 현재 구성
+## 기술 구성
 
-| 구분 | 선택한 도구 | 역할 |
+| 구분 | 기술 | 역할 |
 | --- | --- | --- |
-| 개발환경 | Docker + Docker Compose | Node.js와 Git이 포함된 공통 Linux 개발환경 |
-| 에디터 환경 | VS Code Dev Containers | 컨테이너 접속과 확장 프로그램 자동 설치 |
-| 코드 품질 | ESLint + Prettier | 코드 검사 및 자동 포맷 |
-| 글 작성 지원 | Markdownlint + Markdown All in One | Markdown 문법·형식 검사와 작성 편의 기능 |
-| 설정 파일 지원 | YAML | Docker Compose와 GitHub Actions YAML 작성 지원 |
+| 웹 프레임워크 | Astro | Markdown 글을 읽고 빠른 정적 페이지를 생성합니다. |
+| 스타일 | Tailwind CSS | 화면의 색상, 여백, 반응형 레이아웃을 작성합니다. |
+| 콘텐츠 | Astro Content Collections + Markdown | 글의 메타데이터를 검사하고 목록/상세 페이지에 제공합니다. |
+| 개발 환경 | Docker Compose + Dev Containers | 누구나 같은 Node.js/Linux 환경에서 개발합니다. |
+| 배포 | GitHub Actions + GitHub Pages | `main` 브랜치에 반영된 사이트를 자동 배포합니다. |
 
-## 시작하기
+## 로컬 개발 시작하기
 
-### 준비물
+### 1. Docker 개발 컨테이너 열기
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-- [Visual Studio Code](https://code.visualstudio.com/)
-- VS Code의 **Dev Containers** 확장 프로그램
+Docker Desktop을 실행한 뒤 VS Code로 저장소 폴더를 엽니다.
 
-### 개발 컨테이너 열기
-
-1. Docker Desktop을 실행합니다.
-2. VS Code에서 이 저장소 폴더를 엽니다.
-3. `Ctrl + Shift + P`를 누르고 **Dev Containers: Rebuild and Reopen in Container**를 실행합니다.
-4. 컨테이너 접속이 끝나면 VS Code 터미널에서 다음을 확인합니다.
-
-   ```bash
-   pwd
-   node --version
-   git --version
-   ```
-
-   `pwd`의 결과가 `/workspace`이면 정상입니다.
-
-## Docker 명령어
-
-프로젝트 루트에서 실행합니다.
+1. `Ctrl + Shift + P`
+2. **Dev Containers: Rebuild and Reopen in Container** 선택
+3. 컨테이너 터미널에서 아래 명령 실행
 
 ```bash
-# Dockerfile을 바탕으로 개발 이미지를 생성합니다.
-docker compose build
-
-# 개발 컨테이너를 백그라운드에서 실행합니다.
-docker compose up -d
-
-# 실행 중인 개발 컨테이너를 중지하고 제거합니다.
-docker compose down
+npm ci
+npm run dev
 ```
 
-> 소스 코드는 내 컴퓨터의 프로젝트 폴더에 보관되고 컨테이너의 `/workspace`에 연결됩니다. 따라서 컨테이너를 제거해도 작성한 코드와 글은 사라지지 않습니다.
+브라우저에서 `http://localhost:4321`을 열면 사이트를 볼 수 있습니다. `--host 0.0.0.0` 설정이 되어 있어 Docker 컨테이너 밖의 브라우저에서도 접속할 수 있습니다.
 
-## 디렉터리 구조
+### Docker 명령으로 직접 실행하기
+
+VS Code Dev Container를 사용하지 않는 경우, 프로젝트 루트에서 실행합니다.
+
+```bash
+docker compose build
+docker compose up -d
+docker compose exec blog bash
+```
+
+컨테이너 안에서 `npm ci` 후 `npm run dev`를 실행합니다.
+
+## 자주 사용하는 명령어
+
+```bash
+# 개발 서버 실행: 파일을 저장하면 화면이 자동으로 갱신됩니다.
+npm run dev
+
+# Astro/TypeScript 타입 및 문법 검사
+npm run check
+
+# GitHub Pages에 올릴 정적 파일을 dist/에 생성
+npm run build
+
+# build 결과물을 로컬에서 확인
+npm run preview
+```
+
+## 새 글 작성하기
+
+`src/content/posts/` 아래에 카테고리별 Markdown 파일을 추가합니다.
 
 ```text
-.
-├── .devcontainer/
-│   └── devcontainer.json  # VS Code 개발 컨테이너·확장 프로그램 설정
-├── Dockerfile             # Node.js와 Git을 포함한 개발 이미지 설계도
-├── compose.yaml           # 컨테이너 실행, 폴더·포트 연결 설정
-└── README.md
+src/content/posts/
+├── java/
+├── ai/
+└── algorithm/
 ```
 
-## 앞으로 만들 기능
+예를 들어 Java 글은 `src/content/posts/java/array-list.md`로 만듭니다.
 
-- [ ] Astro 기반 블로그 기본 구조
-- [ ] Markdown 글 작성과 글 목록·상세 페이지
-- [ ] 반응형 디자인과 가독성 개선
-- [ ] GitHub Pages 자동 배포
-- [ ] GitHub Actions 기반 빌드·배포 검증
+```md
+---
+title: "ArrayList 정리"
+description: "ArrayList의 특징과 사용 방법을 정리한다."
+publishedAt: 2026-08-13
+category: "java"
+tags: ["java", "collection"]
+draft: false
+---
+
+# ArrayList
+
+여기부터 본문을 Markdown으로 작성합니다.
+```
+
+`draft: true`로 설정하면 로컬 파일에는 남아 있지만 사이트 목록과 배포 결과에는 표시되지 않습니다.
+
+글을 추가하면 아래 주소가 자동으로 만들어집니다.
+
+```text
+/posts/java/array-list/
+```
+
+## 프로젝트 구조
+
+```text
+src/
+├── components/             # Header, Footer, ProfileSidebar, PostCard
+├── config/                 # 사이트 정보와 카테고리 설정
+├── content/
+│   └── posts/              # 작성한 Markdown 글
+├── content.config.ts       # posts 컬렉션의 위치와 글 형식(schema) 정의
+├── layouts/                # 공통 페이지 레이아웃
+├── pages/
+│   ├── index.astro         # 카테고리 랜딩 페이지
+│   ├── posts.astro         # 전체 글 목록
+│   ├── posts/[...slug].astro # Markdown 글 상세 페이지
+│   └── categories/[category].astro # 카테고리별 글 목록
+└── styles/                 # 전역 스타일
+
+.github/workflows/
+├── ci.yml                  # PR 및 기능 브랜치 검사
+└── main.yml                # main 브랜치 GitHub Pages 배포
+```
+
+## 배포 흐름
+
+1. 기능 브랜치에서 작업하고 Pull Request를 만듭니다.
+2. `ci.yml`이 `npm run check`, `npm run build`를 실행합니다.
+3. PR을 `main`에 병합합니다.
+4. `main.yml`이 `dist/`를 GitHub Pages에 배포합니다.
+
+배포 전에는 로컬에서 다음 명령으로 같은 검사를 실행할 수 있습니다.
+
+```bash
+npm run check
+npm run build
+```
+
+## 설정을 바꾸는 위치
+
+| 바꾸고 싶은 내용 | 파일 |
+| --- | --- |
+| 이름, 소개, 프로필 링크 | `src/config/site.ts` |
+| 카테고리 이름과 설명 | `src/config/categories.ts` |
+| 글의 필수 항목과 허용 카테고리 | `src/content.config.ts` |
+| 전체 색상·폰트·Markdown 본문 스타일 | `src/styles/global.css` |
 
 ---
 
