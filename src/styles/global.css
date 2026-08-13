@@ -17,3 +17,47 @@
 
   a { @apply transition-colors; }
 }
+
+@layer components {
+  .til-content {
+    @apply text-[1rem] leading-8 text-stone-700;
+  }
+
+  .til-content h1 {
+    @apply mt-12 text-3xl font-bold leading-tight tracking-tight text-stone-800;
+  }
+
+  .til-content h2 {
+    @apply mt-10 text-2xl font-bold leading-tight text-stone-800;
+  }
+
+  .til-content h3 {
+    @apply mt-8 text-xl font-bold text-stone-800;
+  }
+
+  .til-content p,
+  .til-content ul,
+  .til-content ol {
+    @apply mt-5;
+  }
+
+  .til-content ul {
+    @apply list-disc space-y-2 pl-6;
+  }
+
+  .til-content ol {
+    @apply list-decimal space-y-2 pl-6;
+  }
+
+  .til-content code {
+    @apply rounded bg-[#e4ddd4] px-1.5 py-0.5 text-sm text-stone-800;
+  }
+
+  .til-content pre {
+    @apply mt-6 overflow-x-auto rounded-md bg-stone-800 p-5 text-sm leading-7 text-stone-100;
+  }
+
+  .til-content pre code {
+    @apply bg-transparent p-0 text-inherit;
+  }
+}
