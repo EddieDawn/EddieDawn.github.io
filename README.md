@@ -131,7 +131,7 @@ python3 scripts/test_import_notion_export.py
 python3 scripts/import_notion_export.py --all
 ```
 
-배치 가져오기는 ZIP 내부 Markdown 파일명에 포함된 Notion 페이지 ID로 `notion-<ID 앞 8자리>.md` 파일을 만듭니다. 같은 페이지를 다시 내보낸 ZIP은 ID가 유지되므로 기존 글과 첨부 파일을 덮어씁니다. 같은 페이지의 ZIP이 여러 개 남아 있으면 수정 시각이 가장 최신인 ZIP을 사용합니다. 제목을 정확한 영어 URL로 자동 번역할 수는 없기 때문에 충돌 없는 임시 slug를 사용하며, 원하면 가져온 뒤 파일명을 바꿔 URL을 정리할 수 있습니다.
+배치 가져오기는 문서 제목으로 `<문서 제목>.md` 파일을 만듭니다. Windows 파일명에 사용할 수 없는 문자는 `-`로 바꾸며, 파일명이 곧 게시글 URL이므로 제목을 바꾸면 URL도 바뀝니다. 같은 Notion 페이지를 다시 내보낸 ZIP은 내부 페이지 ID로 기존 글을 찾아 제목 파일과 첨부 파일을 덮어씁니다. 예전 `notion-<ID>.md` 파일은 제목 파일로 자동 이전되며, 같은 페이지의 ZIP이 여러 개 남아 있으면 수정 시각이 가장 최신인 ZIP을 사용합니다.
 
 ## 프로젝트 구조
 

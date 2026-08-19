@@ -83,10 +83,12 @@ def main() -> int:
         for filename, title, day, identifier in [
             ("11111111-1111-1111-1111-111111111111_ExportBlock.zip", "첫 번째 글", "2026년 8월 14일", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
             ("22222222-2222-2222-2222-222222222222_ExportBlock.zip", "두 번째 글", "2026년 8월 15일", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+            ("44444444-4444-4444-4444-444444444444_ExportBlock.zip", "Windows: 파일?", "2026년 8월 15일", "dddddddddddddddddddddddddddddddd"),
         ]:
             with zipfile.ZipFile(batch_imports / filename, "w") as exported:
+                archive_title = title.replace(":", "").replace("?", "")
                 exported.writestr(
-                    f"{title} {identifier}.md",
+                    f"{archive_title} {identifier}.md",
                     f"# {title}\n\n날짜: {day}\n\n본문\n",
                 )
         batch_content_root = root / "batch-content"
@@ -106,11 +108,12 @@ def main() -> int:
         if batch_result.returncode:
             print(batch_result.stderr, file=sys.stderr)
             return batch_result.returncode
-        assert (batch_content_root / "notion-aaaaaaaa.md").is_file()
-        assert (batch_content_root / "notion-bbbbbbbb.md").is_file()
+        assert (batch_content_root / "첫 번째 글.md").is_file()
+        assert (batch_content_root / "두 번째 글.md").is_file()
+        assert (batch_content_root / "Windows- 파일-.md").is_file()
         assert not (batch_content_root / "notion-11111111.md").exists()
         renamed_post = batch_content_root / "friendly-first-post.md"
-        (batch_content_root / "notion-aaaaaaaa.md").rename(renamed_post)
+        (batch_content_root / "첫 번째 글.md").rename(renamed_post)
         repeat_batch_result = subprocess.run(
             [
                 sys.executable,
@@ -129,7 +132,7 @@ def main() -> int:
             print(repeat_batch_result.stderr, file=sys.stderr)
             return repeat_batch_result.returncode
         assert renamed_post.is_file()
-        assert not (batch_content_root / "notion-aaaaaaaa.md").exists()
+        assert not (batch_content_root / "첫 번째 글.md").exists()
 
         updated_archive = batch_imports / "33333333-3333-3333-3333-333333333333_ExportBlock.zip"
         with zipfile.ZipFile(updated_archive, "w") as exported:
@@ -158,11 +161,12 @@ def main() -> int:
         if overwrite_result.returncode:
             print(overwrite_result.stderr, file=sys.stderr)
             return overwrite_result.returncode
-        updated_post = renamed_post.read_text(encoding="utf-8")
+        titled_post = batch_content_root / "첫 번째 글.md"
+        updated_post = titled_post.read_text(encoding="utf-8")
         assert "publishedAt: 2026-08-16" in updated_post
         assert "수정된 본문" in updated_post
         assert "notion-page-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" in updated_post
-        assert not (batch_content_root / "notion-33333333.md").exists()
+        assert not renamed_post.exists()
 
         legacy_imports = root / "legacy-imports"
         legacy_imports.mkdir()
@@ -201,9 +205,11 @@ def main() -> int:
         if legacy_result.returncode:
             print(legacy_result.stderr, file=sys.stderr)
             return legacy_result.returncode
-        migrated_post = legacy_post.read_text(encoding="utf-8")
+        titled_legacy_post = legacy_content_root / "레거시 글.md"
+        migrated_post = titled_legacy_post.read_text(encoding="utf-8")
         assert "새 본문" in migrated_post
         assert "notion-page-cccccccccccccccccccccccccccccccc" in migrated_post
+        assert not legacy_post.exists()
         assert not (legacy_content_root / "notion-cccccccc.md").exists()
 
     print("Notion ZIP importer test passed.")

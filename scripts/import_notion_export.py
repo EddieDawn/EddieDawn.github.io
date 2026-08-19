@@ -14,6 +14,7 @@ import re
 import shutil
 import sys
 import tempfile
+import unicodedata
 import zipfile
 from dataclasses import dataclass, field
 from datetime import date
@@ -43,6 +44,12 @@ UUID_RE = re.compile(
     r"(?P<id>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
     re.IGNORECASE,
 )
+INVALID_FILENAME_CHARS_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+WINDOWS_RESERVED_FILENAMES = {
+    "CON", "PRN", "AUX", "NUL",
+    *(f"COM{number}" for number in range(1, 10)),
+    *(f"LPT{number}" for number in range(1, 10)),
+}
 
 
 class ImportErrorWithHint(Exception):
@@ -64,6 +71,7 @@ class ImportPlan:
     title: str
     published_at: str
     body: str
+    previous_post_path: Path | None = None
     copied_assets: list[AssetCopy] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -473,11 +481,19 @@ def source_ids_in_posts(content_root: Path) -> set[str]:
 
 def add_source_marker_to_existing_post(plan: ImportPlan) -> bool:
     """Migrate an older auto-named post so a later rename remains recognizable."""
-    if not plan.post_path.is_file():
+    existing_post_path = plan.previous_post_path or plan.post_path
+    if not existing_post_path.is_file():
         return False
-    text = plan.post_path.read_text(encoding="utf-8-sig")
-    if IMPORT_SOURCE_MARKER_RE.search(text):
+    text = existing_post_path.read_text(encoding="utf-8-sig")
+    source_markers = list(IMPORT_SOURCE_MARKER_RE.finditer(text))
+    if any(match.group("source_id") == plan.source_id for match in source_markers):
         return False
+    if source_markers:
+        updated = IMPORT_SOURCE_MARKER_RE.sub(
+            import_source_marker(plan.source_id), text, count=1
+        )
+        existing_post_path.write_text(updated, encoding="utf-8", newline="\n")
+        return True
     frontmatter = FRONTMATTER_RE.match(text)
     if not frontmatter:
         return False
@@ -487,22 +503,21 @@ def add_source_marker_to_existing_post(plan: ImportPlan) -> bool:
         + "\n\n"
         + text[frontmatter.end():]
     )
-    plan.post_path.write_text(updated, encoding="utf-8", newline="\n")
+    existing_post_path.write_text(updated, encoding="utf-8", newline="\n")
     return True
 
 
-def auto_slug(source_markdown: Path, zip_path: Path) -> str:
-    """Create a stable, collision-resistant slug for unattended batch imports."""
-    if page_id := notion_page_id(source_markdown):
-        return f"notion-{page_id[:8]}"
-
-    # Fallback for exports whose Markdown file was manually renamed.
-    zip_id = UUID_RE.search(zip_path.stem)
-    if zip_id:
-        return f"notion-{zip_id.group('id').replace('-', '')[:8].lower()}"
-    raise ImportErrorWithHint(
-        f"자동 slug를 만들 Notion ID를 찾지 못했습니다: {zip_path.name}. 개별 가져오기로 --slug를 지정하세요."
-    )
+def title_filename_stem(title: str, source_id: str) -> str:
+    """Create a readable, Windows-safe Markdown filename stem from a post title."""
+    stem = unicodedata.normalize("NFC", title)
+    stem = INVALID_FILENAME_CHARS_RE.sub("-", stem)
+    stem = re.sub(r"\s+", " ", stem).strip(" .")
+    stem = re.sub(r"-{2,}", "-", stem)
+    if not stem:
+        stem = source_id.removeprefix("notion-page-")[:8] or "notion-post"
+    if stem.split(".", 1)[0].upper() in WINDOWS_RESERVED_FILENAMES:
+        stem += "-post"
+    return stem[:120].rstrip(" .")
 
 
 def existing_post_for_source(content_root: Path, source_id: str) -> Path | None:
@@ -572,14 +587,20 @@ def create_import_plan(args: argparse.Namespace, zip_path: Path, slug: str | Non
         source_markdown = select_source_markdown(extracted_root, args.source)
         title, published_at, body = extract_title_published_at_and_body(source_markdown)
         source_id = import_source_id(source_markdown, zip_path)
-        resolved_slug = slug or auto_slug(source_markdown, zip_path)
+        resolved_slug = slug or title_filename_stem(title, source_id)
+        previous_post_path: Path | None = None
         if slug is None:
             existing_post = existing_post_for_source(args.content_root, source_id)
             natural_post = args.content_root / f"{resolved_slug}.md"
-            if not existing_post and not natural_post.exists():
+            if not existing_post:
                 existing_post = legacy_post_for_title(args.content_root, title)
-            if existing_post:
-                resolved_slug = existing_post.stem
+            if natural_post.exists() and natural_post != existing_post:
+                raise ImportErrorWithHint(
+                    f"제목 파일이 이미 다른 글에 사용되고 있습니다: {natural_post}\n"
+                    "두 글 중 하나의 제목을 바꾼 뒤 다시 가져오세요."
+                )
+            if existing_post and existing_post != natural_post:
+                previous_post_path = existing_post
         rewritten_body, assets, warnings = rewrite_links_and_collect_assets(
             body, source_markdown, extracted_root, args.public_root, resolved_slug
         )
@@ -595,6 +616,7 @@ def create_import_plan(args: argparse.Namespace, zip_path: Path, slug: str | Non
             title=title,
             published_at=published_at,
             source_id=source_id,
+            previous_post_path=previous_post_path,
             body=(
                 build_frontmatter(title, published_at)
                 + import_source_marker(source_id)
@@ -671,6 +693,8 @@ def write_plan(plan: ImportPlan) -> None:
             with source.open("rb") as source_file, asset.destination.open("wb") as destination_file:
                 shutil.copyfileobj(source_file, destination_file)
     plan.post_path.write_text(plan.body, encoding="utf-8", newline="\n")
+    if plan.previous_post_path and plan.previous_post_path.is_file():
+        plan.previous_post_path.unlink()
 
 
 def main() -> int:
