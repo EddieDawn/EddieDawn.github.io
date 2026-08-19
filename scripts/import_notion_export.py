@@ -434,8 +434,19 @@ def build_frontmatter(title: str, published_at: str) -> str:
     )
 
 
-def import_source_id(zip_path: Path) -> str:
-    """Return a stable identifier for a Notion export ZIP, independent of its post path."""
+def notion_page_id(source_markdown: Path) -> str | None:
+    """Return the stable Notion page ID embedded in an exported Markdown filename."""
+    source_id = NOTION_ID_RE.search(source_markdown.stem)
+    return source_id.group("id").lower() if source_id else None
+
+
+def import_source_id(source_markdown: Path, zip_path: Path) -> str:
+    """Return an identifier that remains stable across repeated exports of a page."""
+    if page_id := notion_page_id(source_markdown):
+        return f"notion-page-{page_id}"
+
+    # Older or manually renamed exports may not expose the page ID. Retain the
+    # previous ZIP-based fallback so those files can still be imported.
     zip_id = UUID_RE.search(zip_path.stem)
     if zip_id:
         return f"notion-export-{zip_id.group('id').replace('-', '').lower()}"
@@ -482,15 +493,77 @@ def add_source_marker_to_existing_post(plan: ImportPlan) -> bool:
 
 def auto_slug(source_markdown: Path, zip_path: Path) -> str:
     """Create a stable, collision-resistant slug for unattended batch imports."""
+    if page_id := notion_page_id(source_markdown):
+        return f"notion-{page_id[:8]}"
+
+    # Fallback for exports whose Markdown file was manually renamed.
     zip_id = UUID_RE.search(zip_path.stem)
     if zip_id:
         return f"notion-{zip_id.group('id').replace('-', '')[:8].lower()}"
-    source_id = NOTION_ID_RE.search(source_markdown.stem)
-    if source_id:
-        return f"notion-{source_id.group('id')[:8].lower()}"
     raise ImportErrorWithHint(
         f"자동 slug를 만들 Notion ID를 찾지 못했습니다: {zip_path.name}. 개별 가져오기로 --slug를 지정하세요."
     )
+
+
+def existing_post_for_source(content_root: Path, source_id: str) -> Path | None:
+    """Find a renamed post by its stable import marker."""
+    matches: list[Path] = []
+    if content_root.is_dir():
+        for post_path in content_root.glob("*.md"):
+            text = post_path.read_text(encoding="utf-8-sig")
+            if source_id in (
+                match.group("source_id")
+                for match in IMPORT_SOURCE_MARKER_RE.finditer(text)
+            ):
+                matches.append(post_path)
+    if len(matches) > 1:
+        paths = "\n".join(f"  - {path}" for path in matches)
+        raise ImportErrorWithHint(
+            "같은 Notion 페이지 ID를 가진 기존 글이 여러 개라서 덮어쓸 글을 결정할 수 없습니다.\n"
+            f"중복 글:\n{paths}"
+        )
+    return matches[0] if matches else None
+
+
+def frontmatter_title(post_path: Path) -> str | None:
+    """Read the JSON-compatible title emitted by this importer."""
+    text = post_path.read_text(encoding="utf-8-sig")
+    frontmatter = FRONTMATTER_RE.match(text)
+    if not frontmatter:
+        return None
+    for line in frontmatter.group(0).splitlines():
+        if not line.startswith("title:"):
+            continue
+        try:
+            title = json.loads(line.removeprefix("title:").strip())
+        except json.JSONDecodeError:
+            return None
+        return title if isinstance(title, str) else None
+    return None
+
+
+def legacy_post_for_title(content_root: Path, title: str) -> Path | None:
+    """Find the one legacy ZIP-identified post that can be migrated safely."""
+    matches: list[Path] = []
+    if content_root.is_dir():
+        for post_path in content_root.glob("*.md"):
+            text = post_path.read_text(encoding="utf-8-sig")
+            source_ids = {
+                match.group("source_id")
+                for match in IMPORT_SOURCE_MARKER_RE.finditer(text)
+            }
+            if (
+                any(source_id.startswith("notion-export-") for source_id in source_ids)
+                and frontmatter_title(post_path) == title
+            ):
+                matches.append(post_path)
+    if len(matches) > 1:
+        paths = "\n".join(f"  - {path}" for path in matches)
+        raise ImportErrorWithHint(
+            f"제목이 `{title}`인 기존 글이 여러 개라서 자동으로 합칠 수 없습니다.\n"
+            f"중복 글:\n{paths}"
+        )
+    return matches[0] if matches else None
 
 
 def create_import_plan(args: argparse.Namespace, zip_path: Path, slug: str | None = None) -> ImportPlan:
@@ -498,7 +571,15 @@ def create_import_plan(args: argparse.Namespace, zip_path: Path, slug: str | Non
         extracted_root = extract_zip_safely(zip_path, Path(temporary_directory))
         source_markdown = select_source_markdown(extracted_root, args.source)
         title, published_at, body = extract_title_published_at_and_body(source_markdown)
+        source_id = import_source_id(source_markdown, zip_path)
         resolved_slug = slug or auto_slug(source_markdown, zip_path)
+        if slug is None:
+            existing_post = existing_post_for_source(args.content_root, source_id)
+            natural_post = args.content_root / f"{resolved_slug}.md"
+            if not existing_post and not natural_post.exists():
+                existing_post = legacy_post_for_title(args.content_root, title)
+            if existing_post:
+                resolved_slug = existing_post.stem
         rewritten_body, assets, warnings = rewrite_links_and_collect_assets(
             body, source_markdown, extracted_root, args.public_root, resolved_slug
         )
@@ -513,10 +594,10 @@ def create_import_plan(args: argparse.Namespace, zip_path: Path, slug: str | Non
             post_path=post_path,
             title=title,
             published_at=published_at,
-            source_id=import_source_id(zip_path),
+            source_id=source_id,
             body=(
                 build_frontmatter(title, published_at)
-                + import_source_marker(import_source_id(zip_path))
+                + import_source_marker(source_id)
                 + "\n\n"
                 + rewritten_body
             ),
@@ -551,7 +632,7 @@ def ensure_plans_are_writable(plans: list[ImportPlan], overwrite: bool) -> None:
 
 
 def deduplicate_plans(plans: list[ImportPlan]) -> tuple[list[ImportPlan], list[ImportPlan]]:
-    """Skip byte-for-byte duplicate exports of the same Notion page."""
+    """Keep only the newest export when the same Notion page appears repeatedly."""
     unique_by_post_path: dict[Path, ImportPlan] = {}
     duplicates: list[ImportPlan] = []
     for plan in plans:
@@ -560,19 +641,19 @@ def deduplicate_plans(plans: list[ImportPlan]) -> tuple[list[ImportPlan], list[I
             unique_by_post_path[plan.post_path] = plan
             continue
 
-        existing_assets = {
-            asset.destination: asset.source_relative_path for asset in existing.copied_assets
-        }
-        current_assets = {
-            asset.destination: asset.source_relative_path for asset in plan.copied_assets
-        }
-        if existing.body == plan.body and existing_assets == current_assets:
+        if existing.source_id != plan.source_id:
+            raise ImportErrorWithHint(
+                "서로 다른 Notion 페이지가 같은 글 경로를 사용하려고 합니다.\n"
+                f"충돌 ZIP:\n  - {existing.zip_path.name}\n  - {plan.zip_path.name}"
+            )
+
+        existing_order = (existing.zip_path.stat().st_mtime_ns, existing.zip_path.name)
+        current_order = (plan.zip_path.stat().st_mtime_ns, plan.zip_path.name)
+        if current_order > existing_order:
+            duplicates.append(existing)
+            unique_by_post_path[plan.post_path] = plan
+        else:
             duplicates.append(plan)
-            continue
-        raise ImportErrorWithHint(
-            "같은 Notion 페이지 ID를 가진 ZIP의 내용이 서로 다릅니다. 어떤 내보내기를 쓸지 결정한 뒤 하나만 imports/에 남기세요.\n"
-            f"충돌 ZIP:\n  - {existing.zip_path.name}\n  - {plan.zip_path.name}"
-        )
     return list(unique_by_post_path.values()), duplicates
 
 

@@ -3,7 +3,6 @@ import { spawnSync } from "node:child_process";
 const importerArgs = [
   "scripts/import_notion_export.py",
   "--all",
-  "--skip-existing",
   "--overwrite",
   "--allow-empty",
 ];
