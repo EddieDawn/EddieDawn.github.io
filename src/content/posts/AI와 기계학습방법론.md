@@ -240,8 +240,10 @@ local minimum에 빠질 가능성이 크고, 한 번 빠지면 또 나오기도 
 
 ![image.png](/images/AI%EC%99%80%20%EA%B8%B0%EA%B3%84%ED%95%99%EC%8A%B5%EB%B0%A9%EB%B2%95%EB%A1%A0/image%2043.png)
 
+![image.png](/images/AI%EC%99%80%20%EA%B8%B0%EA%B3%84%ED%95%99%EC%8A%B5%EB%B0%A9%EB%B2%95%EB%A1%A0/image%2044.png)
+
 - 미분 경로의 무작위성
-- 노이즈가 있지만 여전히 타당한 업데이트 → saddle point, local min 탈출
+- 노이즈가 있지만 여전히 타당한 업데이트 → 오히려 saddle point, local min 탈출에 도움을 줌
 - 계산 비용 절감
 - 매끄럽지 않고 지그재그하게 수렴한다
 
@@ -249,18 +251,22 @@ local minimum에 빠질 가능성이 크고, 한 번 빠지면 또 나오기도 
 
 → Layer별로 파라미터들이 존재해서 서로 영향을 미치는데, 미분을 어케함?
 
-## 합성함수의 미분: 연쇄법칙
-
-![image.png](/images/AI%EC%99%80%20%EA%B8%B0%EA%B3%84%ED%95%99%EC%8A%B5%EB%B0%A9%EB%B2%95%EB%A1%A0/image%2044.png)
-
-![image.png](/images/AI%EC%99%80%20%EA%B8%B0%EA%B3%84%ED%95%99%EC%8A%B5%EB%B0%A9%EB%B2%95%EB%A1%A0/image%2045.png)
-
 ## 역전파란?
 
-출력 오차 기준으로 그래프를 거꾸로 따라가며 연쇄법칙으로 각 노드의 미분값을 계산하는 절차
+모델이 틀린 정도를 보고, 각 가중치(파라미터)가 그 오답에 얼마나 책임이 있는지 뒤에서부터 계산하는 과정출력 오차 기준으로 그래프를 거꾸로 따라가며 연쇄법칙으로 각 노드의 미분값을 계산하는 절차
 
 ! : depth가 깊어지면 표현력이 증가함.
 근데 역전파에서 미분값 구하려면 계산량이 너무 많아져서 학습이 어려워짐
 trade off, no free lunch
 
 그니까 엄청 복잡한 식을 거꾸로(반대 방향으로) 미분하여 파라미터를 찾아내는 과정을 말함.
+
+![image.png](/images/AI%EC%99%80%20%EA%B8%B0%EA%B3%84%ED%95%99%EC%8A%B5%EB%B0%A9%EB%B2%95%EB%A1%A0/image%2045.png)
+
+![image.png](/images/AI%EC%99%80%20%EA%B8%B0%EA%B3%84%ED%95%99%EC%8A%B5%EB%B0%A9%EB%B2%95%EB%A1%A0/image%2046.png)
+
+![image.png](/images/AI%EC%99%80%20%EA%B8%B0%EA%B3%84%ED%95%99%EC%8A%B5%EB%B0%A9%EB%B2%95%EB%A1%A0/image%2047.png)
+
+![image.png](/images/AI%EC%99%80%20%EA%B8%B0%EA%B3%84%ED%95%99%EC%8A%B5%EB%B0%A9%EB%B2%95%EB%A1%A0/image%2048.png)
+
+![image.png](/images/AI%EC%99%80%20%EA%B8%B0%EA%B3%84%ED%95%99%EC%8A%B5%EB%B0%A9%EB%B2%95%EB%A1%A0/image%2049.png)
